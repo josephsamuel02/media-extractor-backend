@@ -245,6 +245,14 @@ export class MediaService {
       ) {
         return new BadRequestException("This platform/URL isn't supported");
       }
+      // YouTube bot-challenges datacenter IPs ("Sign in to confirm you're not
+      // a bot"). Only cookie auth fixes that — out of scope for this no-login
+      // service — so say so explicitly instead of the generic message.
+      if (lower.includes('not a bot') || lower.includes('cookies-from-browser')) {
+        return new UnprocessableEntityException(
+          "Couldn't extract media: YouTube flagged this server as bot traffic (cookie login required)",
+        );
+      }
       // Private / deleted / geo-blocked / login-gated and friends.
       return new UnprocessableEntityException(
         "Couldn't extract media from this post",

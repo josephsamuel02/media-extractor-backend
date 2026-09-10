@@ -5,6 +5,7 @@ interface RawFormat {
   ext?: string;
   height?: number;
   width?: number;
+  resolution?: string;
   vcodec?: string;
   acodec?: string;
   filesize?: number;
@@ -39,9 +40,20 @@ function isStoryboard(f: RawFormat): boolean {
 }
 
 /**
- * Keep only pre-muxed, directly downloadable formats:
- * both audio + video tracks present (acodec/vcodec !== 'none').
- * Sorts by height desc, then bitrate desc. Returns top N.
+ * Keep only directly downloadable formats, in two tiers:
+ *
+ * Tier 1 — progressive direct files over plain https (single files the client
+ * can download as-is). Some extractors (twitter, facebook) report NO
+ * vcodec/acodec on these, so only exclude a direct file when we KNOW it is a
+ * split stream (explicit 'none' on one side, real codec on the other).
+ *
+ * Tier 2 — explicitly muxed streams (both codecs present, not 'none'),
+ * regardless of protocol (e.g. YouTube 360p/720p progressive, muxed HLS).
+ *
+ * Split-only streams (DASH video-only / audio-only, video-only HLS) are never
+ * returned: they are not playable on their own and the client has no ffmpeg
+ * to merge them. Sorts each tier by resolution, then size, then bitrate —
+ * best first. Returns at most `limit` entries.
  */
 export function filterPlayableFormats(
   rawFormats: RawFormat[] | undefined,
@@ -49,40 +61,79 @@ export function filterPlayableFormats(
 ): MediaFormatDto[] {
   if (!Array.isArray(rawFormats) || rawFormats.length === 0) return [];
 
-  const playable = rawFormats.filter(
+  const candidates = rawFormats.filter((f) => !!f.url && !isStoryboard(f));
+  const picked = new Set<RawFormat>();
+
+  const direct = candidates.filter((f) => {
+    const proto = f.protocol ?? (f.url!.startsWith('http') ? 'https' : '');
+    return (
+      (proto === 'https' || proto === 'http') &&
+      !isKnownVideoOnly(f) &&
+      !isKnownAudioOnly(f)
+    );
+  });
+  const muxed = candidates.filter(
     (f) =>
-      !!f.url &&
-      !isStoryboard(f) &&
-      f.vcodec !== 'none' &&
-      f.acodec !== 'none' &&
       f.vcodec != null &&
-      f.acodec != null,
+      f.vcodec !== 'none' &&
+      f.acodec != null &&
+      f.acodec !== 'none',
   );
 
-  playable.sort((a, b) => {
-    const ha = a.height ?? 0;
-    const hb = b.height ?? 0;
+  const ordered = [...sortFormats(direct), ...sortFormats(muxed)].filter((f) =>
+    picked.has(f) ? false : (picked.add(f), true),
+  );
+
+  return ordered.slice(0, limit).map(toDto);
+}
+
+function isKnownVideoOnly(f: RawFormat): boolean {
+  return f.vcodec != null && f.vcodec !== 'none' && f.acodec === 'none';
+}
+
+function isKnownAudioOnly(f: RawFormat): boolean {
+  return f.acodec != null && f.acodec !== 'none' && f.vcodec === 'none';
+}
+
+function effectiveHeight(f: RawFormat): number {
+  if (f.height) return f.height;
+  const m = /(\d+)\s*x\s*(\d+)/.exec(f.resolution ?? '');
+  return m ? Number(m[2]) : 0;
+}
+
+function effectiveSize(f: RawFormat): number {
+  return f.filesize ?? f.filesize_approx ?? 0;
+}
+
+function sortFormats(formats: RawFormat[]): RawFormat[] {
+  return [...formats].sort((a, b) => {
+    const ha = effectiveHeight(a);
+    const hb = effectiveHeight(b);
     if (hb !== ha) return hb - ha;
+    const sa = effectiveSize(a);
+    const sb = effectiveSize(b);
+    if (sb !== sa) return sb - sa;
     return (b.tbr ?? 0) - (a.tbr ?? 0);
   });
+}
 
-  return playable.slice(0, limit).map((f) => {
-    let quality: string;
-    if (f.height) {
-      quality = `${f.height}p`;
-    } else if (f.format_note && /\d+p/.test(f.format_note)) {
-      quality = f.format_note.match(/\d+p/)![0];
-    } else {
-      quality = f.format_id ?? 'default';
-    }
-    return {
-      quality,
-      ext: f.ext ?? 'mp4',
-      url: f.url!,
-      approxFilesizeBytes: f.filesize ?? f.filesize_approx ?? undefined,
-      headers: f.http_headers ?? undefined,
-    };
-  });
+function toDto(f: RawFormat): MediaFormatDto {
+  let quality: string;
+  const h = effectiveHeight(f);
+  if (h) {
+    quality = `${h}p`;
+  } else if (f.format_note && /\d+p/.test(f.format_note)) {
+    quality = f.format_note.match(/\d+p/)![0];
+  } else {
+    quality = f.format_id ?? 'default';
+  }
+  return {
+    quality,
+    ext: f.ext ?? 'mp4',
+    url: f.url!,
+    approxFilesizeBytes: f.filesize ?? f.filesize_approx ?? undefined,
+    headers: f.http_headers ?? undefined,
+  };
 }
 
 export function guessImageExt(url: string): string {
