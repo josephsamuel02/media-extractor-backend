@@ -71,6 +71,17 @@ export class MediaService {
 
   private normalize(data: any): ExtractionResultDto {
     const platform = normalizePlatform(data?.extractor_key ?? data?.extractor);
+    const rawFormats = Array.isArray(data?.formats) ? data.formats : [];
+    this.logger.log(
+      `formats: platform=${platform} raw=${rawFormats.length} ` +
+        rawFormats
+          .slice(0, 12)
+          .map(
+            (f: any) =>
+              `[${f?.format_id ?? '?'}|${f?.ext ?? '?'}|v=${f?.vcodec ?? '?'}|a=${f?.acodec ?? '?'}|${f?.protocol ?? '?'}]`,
+          )
+          .join(''),
+    );
     const title: string | undefined =
       typeof data?.title === 'string' ? data.title : undefined;
     const thumbnail: string | undefined =
