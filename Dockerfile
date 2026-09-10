@@ -10,6 +10,9 @@ RUN apt-get update \
   && apt-get purge -y --auto-remove curl \
   && rm -rf /var/lib/apt/lists/*
 
+# Fail the image build early if the yt-dlp download broke.
+RUN yt-dlp --version && ffmpeg -version | head -n 1
+
 WORKDIR /app
 
 COPY package*.json ./

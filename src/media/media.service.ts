@@ -18,6 +18,9 @@ import {
 } from './utils/format-filter';
 
 const YTDLP_TIMEOUT_MS = 30000;
+// Absolute path override for environments where the binary isn't on PATH
+// (e.g. Render native runtime, Windows dev). Docker image has it on PATH.
+const YTDLP_BIN = process.env.YTDLP_PATH ?? 'yt-dlp';
 
 export class YtDlpExecutionError extends Error {
   exitCode?: number;
@@ -34,7 +37,7 @@ export class MediaService {
     let stdout: string;
     try {
       const result = await execa(
-        'yt-dlp',
+        YTDLP_BIN,
         [
           '--dump-json',
           '--no-warnings',
@@ -205,9 +208,20 @@ export class MediaService {
     if (err?.timedOut) {
       return new GatewayTimeoutException('Extraction timed out');
     }
-    const stderr: string = String(err?.stderr ?? err?.shortMessage ?? '');
+    const stderr: string = String(err?.stderr ?? '');
     const exitCode: number | undefined = err?.exitCode;
-    this.logger.error(`yt-dlp failed (exit ${exitCode}): ${stderr.slice(0, 500)}`);
+    const code: string | undefined = err?.code;
+    const short: string = String(err?.shortMessage ?? err?.message ?? err);
+    this.logger.error(
+      `yt-dlp failed (bin=${YTDLP_BIN} code=${code} exit=${exitCode}): ${short.slice(0, 300)} | stderr: ${stderr.slice(0, 500)}`,
+    );
+
+    // Binary missing on this machine (e.g. host without yt-dlp installed).
+    if (code === 'ENOENT') {
+      return new InternalServerErrorException(
+        'Media extractor binary (yt-dlp) is not installed on the server',
+      );
+    }
 
     if (exitCode != null && exitCode !== 0) {
       const lower = stderr.toLowerCase();

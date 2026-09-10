@@ -46,11 +46,17 @@ Error map: bad URL → 400; unsupported platform → 400; private/deleted/geo-bl
 PORT=3000
 THROTTLE_TTL=60      # seconds, per-IP window
 THROTTLE_LIMIT=20    # requests per window per IP
+# YTDLP_PATH=/usr/local/bin/yt-dlp   # optional: absolute path to the yt-dlp
+                                     # binary when it isn't on PATH
 ```
 
 ## Deploy
 
-Build from the `Dockerfile` (Railway / Render / Fly.io). Do not target Vercel
+Build from the `Dockerfile` (Railway / Render / Fly.io). On Render the service
+**Runtime must be Docker** — with the default Node runtime Render ignores the
+Dockerfile, so `yt-dlp`/`ffmpeg` never get installed and every
+`/media/extract` call fails with `Media extractor binary (yt-dlp) is not
+installed on the server`. Do not target Vercel
 serverless — native binaries + 30s extraction timeouts don't fit that model.
 
 ## Keeping yt-dlp current (important)
