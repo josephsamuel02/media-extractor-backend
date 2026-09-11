@@ -43,6 +43,11 @@ export class MediaService {
           '--no-warnings',
           '--no-playlist',
           '--skip-download',
+          // Namespaced to the youtube extractor: ignored for X/Facebook/
+          // TikTok/Instagram. tv + web_safari clients draw far less
+          // bot-scrutiny than the default web client on datacenter IPs.
+          '--extractor-args',
+          'youtube:player_client=tv,web_safari',
           url,
         ],
         { timeout: YTDLP_TIMEOUT_MS },
