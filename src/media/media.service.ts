@@ -17,6 +17,7 @@ import {
   guessImageExt,
   normalizePlatform,
 } from './utils/format-filter';
+import { YoutubeCookiesService } from './cookies/youtube-cookies.service';
 
 const YTDLP_TIMEOUT_MS = 30000;
 // Absolute path override for environments where the binary isn't on PATH
@@ -38,6 +39,8 @@ export class YtDlpExecutionError extends Error {
 export class MediaService {
   private readonly logger = new Logger(MediaService.name);
 
+  constructor(private readonly cookies: YoutubeCookiesService) {}
+
   async extract(rawUrl: string): Promise<ExtractionResultDto> {
     const url = rawUrl.trim();
     let stdout: string;
@@ -56,6 +59,7 @@ export class MediaService {
           'youtube:player_client=tv,web_safari',
           ...PLUGIN_ARGS,
           ...VERBOSE_ARGS,
+          ...this.cookies.buildCookieArgs(),
           url,
         ],
         { timeout: YTDLP_TIMEOUT_MS },

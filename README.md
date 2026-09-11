@@ -100,6 +100,37 @@ a localhost-binding security fix (same-container traffic only, which is exactly
 our topology). If this ever proves too fragile, dropping back to layer 1 only
 is fine — X/Facebook/TikTok/Instagram never had this problem.
 
+## YouTube cookies (required for YouTube, optional otherwise)
+
+YouTube bot-challenges datacenter IPs, so YouTube extraction needs an
+authenticated cookie jar. Everything else works without it. The secret travels
+as `YTDLP_COOKIES_B64` (Base64 of a Netscape `cookies.txt` export) and is
+materialized into the OS temp dir at runtime — never committed, never logged,
+never returned by the API.
+
+Local setup:
+
+1. Export your YouTube cookies (browser extension, Netscape format) to
+   `cookies.txt` in the project root (already Git-ignored — verify with
+   `git check-ignore -v cookies.txt`).
+2. Run `npm run cookies:encode` — the Base64 value is copied to your clipboard
+   (the script never prints or modifies the original file).
+3. Paste it into your local `.env` as `YTDLP_COOKIES_B64=<paste>`.
+4. Start the app — startup logs `YouTube yt-dlp cookies: configured
+   (environment variable)`. Without the variable it logs `not configured` and
+   keeps running; YouTube URLs then return the bot-traffic 422.
+
+   Dev shortcut: if the variable is missing but `cookies.txt` exists (and
+   `NODE_ENV` isn't `production`), the local file is used automatically.
+
+Render setup:
+
+1. Open the service → Environment Variables.
+2. Add key `YTDLP_COOKIES_B64`, paste the Base64 value, save (redeploys).
+3. The app recreates the temp cookie file on every boot — nothing to persist,
+   and `cookies.txt` must never be committed for this to work (it isn't needed
+   on the server at all).
+
 ## Scope notes
 
 Public posts only — no login, no private/friends-only content, no proxying or

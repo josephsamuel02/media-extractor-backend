@@ -3,3 +3,5 @@ dist
 coverage
 .git
 .env
+# yt-dlp auth cookies — secret, never bake into images
+cookies.txt

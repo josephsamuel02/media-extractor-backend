@@ -42,3 +42,6 @@ Thumbs.db
 
 # Temp debug logs
 boot*.log
+
+# yt-dlp auth cookies — secret, never commit
+cookies.txt

@@ -14,9 +14,18 @@ describe('AppController', () => {
     appController = app.get<AppController>(AppController);
   });
 
+  describe('health', () => {
+    it('should return status ok', () => {
+      expect(appController.health()).toEqual({ status: 'ok' });
+    });
+  });
+
   describe('root', () => {
-    it('should return "Hello World!"', () => {
-      expect(appController.getHello()).toBe('Hello World!');
+    it('should return service info', () => {
+      expect(appController.root()).toEqual({
+        status: 'ok',
+        service: 'media-extractor-backend',
+      });
     });
   });
 });
