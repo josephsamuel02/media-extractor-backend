@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   GatewayTimeoutException,
+  HttpException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -264,8 +265,19 @@ export class MediaService {
         return new BadRequestException("This platform/URL isn't supported");
       }
       // YouTube bot-challenges datacenter IPs ("Sign in to confirm you're not
-      // a bot"). Only cookie auth fixes that — out of scope for this no-login
-      // service — so say so explicitly instead of the generic message.
+      // a bot"). Cookie auth usually fixes that — unless the cookies
+      // themselves are stale (YouTube rotates them) or the IP is throttled.
+      if (lower.includes('no longer valid')) {
+        return new UnprocessableEntityException(
+          "Couldn't extract media: the server's YouTube cookies expired or were rotated — re-export fresh cookies",
+        );
+      }
+      if (lower.includes('http error 429') || lower.includes('too many requests')) {
+        return new HttpException(
+          'YouTube rate-limited this server — wait a minute and retry',
+          429,
+        );
+      }
       if (lower.includes('not a bot') || lower.includes('cookies-from-browser')) {
         return new UnprocessableEntityException(
           "Couldn't extract media: YouTube flagged this server as bot traffic (cookie login required)",
