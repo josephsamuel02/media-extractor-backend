@@ -48,6 +48,9 @@ THROTTLE_TTL=60      # seconds, per-IP window
 THROTTLE_LIMIT=20    # requests per window per IP
 # YTDLP_PATH=/usr/local/bin/yt-dlp   # optional: absolute path to the yt-dlp
                                      # binary when it isn't on PATH
+# YTDLP_VERBOSE=1                    # optional: pass -v to yt-dlp so failure
+                                     # logs include debug lines (e.g. whether
+                                     # the PO-token plugin engaged)
 ```
 
 ## Deploy
@@ -71,6 +74,31 @@ chmod a+rx /usr/local/bin/yt-dlp
 ```
 
 Consider a weekly scheduled job that re-pulls the latest release binary.
+
+## YouTube bot-check workaround (PO-token provider)
+
+YouTube flags datacenter IPs and demands proof-of-origin tokens. Two layers
+mitigate this, no login involved:
+
+1. Every request passes `--extractor-args youtube:player_client=tv,web_safari`
+   (namespaced — ignored for other platforms).
+2. The Docker image bundles the
+   [`bgutil-ytdlp-pot-provider`](https://github.com/Brainicism/bgutil-ytdlp-pot-provider)
+   server (**pinned to `2.0.0`** via `ARG BGUTIL_VERSION` in the Dockerfile)
+   plus its yt-dlp plugin. `start.sh` boots the token server on localhost:4416
+   before Nest starts; the service passes `--plugin-dirs` only when that folder
+   exists (i.e. inside the image, never local dev).
+
+Verify the plugin is engaged: set `YTDLP_VERBOSE=1` on the service, trigger a
+failing YouTube extraction, and look for
+`[youtube] [pot] PO Token Providers: bgutil:http-... (external)` in the error
+log. `(external, unavailable)` means the plugin can't reach the server.
+
+Maintenance: bump `BGUTIL_VERSION` deliberately when YouTube changes detection
+again — never track the provider's default branch. The 2.0.0 pin also carries
+a localhost-binding security fix (same-container traffic only, which is exactly
+our topology). If this ever proves too fragile, dropping back to layer 1 only
+is fine — X/Facebook/TikTok/Instagram never had this problem.
 
 ## Scope notes
 

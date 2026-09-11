@@ -7,6 +7,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { execa } from 'execa';
+import { existsSync } from 'node:fs';
 import {
   ExtractionResultDto,
   MediaFormatDto,
@@ -21,6 +22,11 @@ const YTDLP_TIMEOUT_MS = 30000;
 // Absolute path override for environments where the binary isn't on PATH
 // (e.g. Render native runtime, Windows dev). Docker image has it on PATH.
 const YTDLP_BIN = process.env.YTDLP_PATH ?? 'yt-dlp';
+// PO-token plugin ships inside the Docker image only; absent in local dev.
+const PLUGIN_DIR = '/usr/local/bin/yt-dlp-plugins';
+const PLUGIN_ARGS = existsSync(PLUGIN_DIR) ? ['--plugin-dirs', PLUGIN_DIR] : [];
+// YTDLP_VERBOSE=1 adds -v (debug lines land in the failure log) for diagnosis.
+const VERBOSE_ARGS = process.env.YTDLP_VERBOSE === '1' ? ['-v'] : [];
 
 export class YtDlpExecutionError extends Error {
   exitCode?: number;
@@ -48,6 +54,8 @@ export class MediaService {
           // bot-scrutiny than the default web client on datacenter IPs.
           '--extractor-args',
           'youtube:player_client=tv,web_safari',
+          ...PLUGIN_ARGS,
+          ...VERBOSE_ARGS,
           url,
         ],
         { timeout: YTDLP_TIMEOUT_MS },
@@ -228,8 +236,9 @@ export class MediaService {
     const exitCode: number | undefined = err?.exitCode;
     const code: string | undefined = err?.code;
     const short: string = String(err?.shortMessage ?? err?.message ?? err);
+    const snip = process.env.YTDLP_VERBOSE === '1' ? 3000 : 500;
     this.logger.error(
-      `yt-dlp failed (bin=${YTDLP_BIN} code=${code} exit=${exitCode}): ${short.slice(0, 300)} | stderr: ${stderr.slice(0, 500)}`,
+      `yt-dlp failed (bin=${YTDLP_BIN} code=${code} exit=${exitCode}): ${short.slice(0, 300)} | stderr: ${stderr.slice(0, snip)}`,
     );
 
     // Binary missing on this machine (e.g. host without yt-dlp installed).

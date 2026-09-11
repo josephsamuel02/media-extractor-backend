@@ -1,0 +1,2 @@
+# Shell scripts must keep LF endings (Windows CRLF breaks #!/bin/sh).
+start.sh text eol=lf
